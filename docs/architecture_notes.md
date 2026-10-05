@@ -10,8 +10,12 @@ Status: Phase 4.3.3. Documentation only. Nothing here is implemented.
 - State is handled with Flutter built-ins only (`StatefulWidget`,
   `ValueNotifier`, `ChangeNotifier`, `InheritedWidget`) while the app is a skeleton.
 - Routing is a minimal `onGenerateRoute` in `lib/core/routing/`.
-- Dependencies are exactly what the generated Flutter project provides
-  (see `pubspec.yaml`). Nothing has been added.
+- Dependencies are what the generated Flutter project provides, except
+  `cupertino_icons`, which was unused and removed in Phase 4.5. No other
+  package has been added (see `pubspec.yaml`).
+- The application version is defined only by `version:` in `pubspec.yaml`.
+  Android and Windows builds take it from there. `AppConfig` does not store a
+  version.
 
 ## Approved stack (from the project definition)
 
@@ -25,8 +29,9 @@ These are part of the approved stack but are NOT yet added or implemented:
 
 - State-management approach (a package, or Flutter built-ins only)
 - Routing approach (a package, or the built-in Navigator)
+- How to show the application version at runtime, if it is ever needed
 
-No package for either will be added until the Project Manager approves it.
+No package for any of these will be added until the Project Manager approves it.
 
 ## Rules for adding a dependency
 
