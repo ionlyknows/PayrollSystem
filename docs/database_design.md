@@ -130,9 +130,21 @@ feature is specified, and how a server authorization is evidenced in stored rows
   floating point. When a calculation produces a fraction of a centavo, the result is rounded to
   the nearest centavo using half-up rounding. Examples: PHP 10.004 becomes PHP 10.00 and
   PHP 10.005 becomes PHP 10.01.
-- OPEN DECISION (OD-30): where rounding is applied (per line item, per record, or only on totals)
-  and how half-up applies to negative amounts such as adjustments. OD-29 fixes the rounding mode,
-  not these points.
+- RESOLVED (OD-30): rounding is applied at the level of each independently calculated payroll
+  line/record, before that amount is included in any total. Independently calculated lines include
+  basic pay, tardiness deduction, overtime pay, each individual deduction, each individual
+  adjustment, and any other calculated earning or deduction. Calculation order:
+  1. Calculate each payroll earning/deduction line.
+  2. Round that line to the nearest centavo using half-up rounding (OD-29).
+  3. Store the resulting integer-centavo amount.
+  4. Sum the already-rounded line amounts to calculate payroll totals.
+  5. Calculate net pay from the resulting integer-centavo totals.
+
+  Rounding is never deferred to the final payroll total.
+- RESOLVED (OD-30), negative amounts: half-up rounding is symmetric around zero. The absolute value
+  is rounded half-up, then the negative sign is restored. Examples: 10.004 becomes 10.00, 10.005
+  becomes 10.01, -10.004 becomes -10.00, and -10.005 becomes -10.01. All monetary values remain
+  integer centavos, and floating-point monetary values are never used.
 
 ### 3.5 Naming and referential rules
 
@@ -307,7 +319,7 @@ are `duration` (integer minutes, OD-28). Every `money` column holds integer cent
 | void_reason | text | N | |
 
 - **Foreign keys:** `employee_id` to `employees.id`; `voided_by` to `user_profiles.id`.
-- **Derived, not stored:** hourly rate = daily rate / 12 (rounded half-up to the nearest centavo, OD-29; where rounding is applied: OPEN DECISION OD-30). The 12 comes from the configured
+- **Derived, not stored:** hourly rate = daily rate / 12 (rounded half-up to the nearest centavo per line, OD-29 and OD-30). The 12 comes from the configured
   standard shift length (section 5.28), never from a constant in code or schema.
 - **Unique/non-overlap rule (required):** for one employee, non-voided rows must never
   have overlapping effective periods.
@@ -797,6 +809,9 @@ are `duration` (integer minutes, OD-28). Every `money` column holds integer cent
 - **Foreign keys:** `payroll_period_id`, `employee_id`, `employee_pay_rate_id`, `business_rule_version_id`.
 - **Unique:** `(payroll_period_id, employee_id)`.
 - **CHECK:** `net_pay = total_earnings - total_deductions + total_adjustments`.
+- **Rounding (RESOLVED, OD-30):** `total_earnings`, `total_deductions` and `total_adjustments` are
+  sums of already-rounded integer-centavo line amounts, and `net_pay` is computed from those
+  integer totals. Totals are never rounded from unrounded intermediate values.
 - **Indexes:** unique `(payroll_period_id, employee_id)`; `(employee_id)`.
 - **History/audit:** The snapshot columns make the result reproducible regardless of later
   changes to rates, names, positions, or rules. Frozen when the parent period is locked.
@@ -1202,7 +1217,7 @@ Nothing here is implemented. It is recorded so the schema does not block a later
 
 ### 11.1 Resolved decisions
 
-Resolved by the Project Manager on 2026-10-06. OD-01 to OD-04, OD-28 and OD-29 are fully resolved. For OD-17,
+Resolved by the Project Manager on 2026-10-06. OD-01 to OD-04, OD-28, OD-29 and OD-30 are fully resolved. For OD-17,
 OD-19, and OD-21, only the part shown here is resolved; the remainder stays open in 11.2.
 
 | ID | Resolved decision | Applied in |
@@ -1216,6 +1231,7 @@ OD-19, and OD-21, only the part shown here is resolved; the remainder stays open
 | OD-21 (storage decision only) | No raw biometric data; event/reference metadata only; adapter layer | 5.31 |
 | OD-28 | Durations stored as integer minutes (30 = 30, 1 hour = 60, 12-hour shift = 720); hours derived from minutes; no floating-point hours | 3.4, 5.14, 5.24, 5.25 |
 | OD-29 | Integer centavos with centavo-safe arithmetic; fractions rounded to the nearest centavo, half-up (PHP 10.004 = 10.00, PHP 10.005 = 10.01) | 3.4, 5.5 |
+| OD-30 | Each independently calculated line is rounded half-up to the centavo before being summed into totals; net pay is computed from integer totals; half-up is symmetric around zero for negatives (-10.005 = -10.01) | 3.4, 5.5, 5.23 |
 
 ### 11.2 Remaining open decisions
 
@@ -1244,7 +1260,6 @@ OD-19, and OD-21, only the part shown here is resolved; the remainder stays open
 | OD-25 | Sync scope, per-table conflict policy, tombstones, server-time authority | sync_* tables |
 | OD-26 | Backup scope, encryption, location, restore authority, cloud reconciliation | backup_records |
 | OD-27 | Cloud migration tooling; local/cloud compatibility policy | Migrations |
-| OD-30 | Where rounding is applied (per line, per record, or totals only) and how half-up applies to negative amounts | payroll_records, payroll_earnings, payroll_deductions, payroll_adjustments |
 
 Resolution of any open decision requires Project Manager approval. This document is then updated
 in the same change that records the decision.
