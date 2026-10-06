@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:goil_payroll_attendance/core/database/database_location.dart';
 
 part 'app_database.g.dart';
 
@@ -11,9 +12,10 @@ part 'app_database.g.dart';
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
-  /// Opens the on-device database file.
-  factory AppDatabase.open() =>
-      AppDatabase(driftDatabase(name: 'goil_payroll'));
+  /// Opens the on-device database file (location: see database_location.dart).
+  factory AppDatabase.open() => AppDatabase(
+    driftDatabase(name: databaseName, native: databaseStorageOptions()),
+  );
 
   static const int currentSchemaVersion = 1;
 
