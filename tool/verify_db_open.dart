@@ -17,6 +17,8 @@ const List<String> _expectedTables = [
   'employees',
   'positions',
   'roles',
+  'schedules',
+  'shift_assignments',
   'user_profiles',
 ];
 

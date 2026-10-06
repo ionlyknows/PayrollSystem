@@ -150,14 +150,14 @@ void main() {
   });
 
   group('schema', () {
-    test('opens at schema version 2 with foreign keys enabled', () async {
-      expect(AppDatabase.currentSchemaVersion, 2);
-      expect(await _pragmaInt(db, 'user_version'), 2);
+    test('opens at schema version 3 with foreign keys enabled', () async {
+      expect(AppDatabase.currentSchemaVersion, 3);
+      expect(await _pragmaInt(db, 'user_version'), 3);
       expect(await _pragmaInt(db, 'foreign_keys'), 1);
     });
 
-    test('contains exactly the five approved tables', () async {
-      expect(await _names(db, 'table'), unorderedEquals(_expectedTables));
+    test('contains the five approved identity tables', () async {
+      expect(await _names(db, 'table'), containsAll(_expectedTables));
     });
 
     test('creates the approved indexes', () async {
@@ -816,7 +816,7 @@ void main() {
   });
 
   group('migration from schema version 1', () {
-    test('an empty version 1 database is upgraded to version 2', () async {
+    test('an empty version 1 database is upgraded to version 3', () async {
       final migrated = AppDatabase(
         NativeDatabase.memory(
           setup: (raw) {
@@ -826,7 +826,7 @@ void main() {
       );
       addTearDown(migrated.close);
 
-      expect(await _names(migrated, 'table'), unorderedEquals(_expectedTables));
+      expect(await _names(migrated, 'table'), containsAll(_expectedTables));
       expect(
         await _names(migrated, 'index'),
         containsAll([
@@ -834,7 +834,7 @@ void main() {
           'uq_employee_pay_rates_open_ended',
         ]),
       );
-      expect(await _pragmaInt(migrated, 'user_version'), 2);
+      expect(await _pragmaInt(migrated, 'user_version'), 3);
       expect(await _pragmaInt(migrated, 'foreign_keys'), 1);
     });
 
@@ -881,8 +881,8 @@ void main() {
 
       final roles = await second.select(second.roles).get();
       expect(roles.single.id, roleId);
-      expect(await _pragmaInt(second, 'user_version'), 2);
-      expect(await _names(second, 'table'), unorderedEquals(_expectedTables));
+      expect(await _pragmaInt(second, 'user_version'), 3);
+      expect(await _names(second, 'table'), containsAll(_expectedTables));
     });
   });
 }

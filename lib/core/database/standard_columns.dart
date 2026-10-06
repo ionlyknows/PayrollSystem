@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:goil_payroll_attendance/core/database/instant_converter.dart';
 import 'package:goil_payroll_attendance/core/database/tables/user_profiles.dart';
 import 'package:goil_payroll_attendance/core/utils/id_generator.dart';
 
@@ -8,11 +9,14 @@ import 'package:goil_payroll_attendance/core/utils/id_generator.dart';
 /// (RESTRICT). The design (section 3.3) allows null only for system-generated
 /// rows; that rule is enforced later at the repository/audit layer, not by the
 /// schema (PM decision for Phase 4.6.4).
+///
+/// Instants use [CanonicalInstantConverter] (fixed-width UTC text).
 mixin StandardLedgerColumns on Table {
   TextColumn get id => text().clientDefault(IdGenerator.newId)();
 
-  DateTimeColumn get createdAt =>
-      dateTime().clientDefault(() => DateTime.now().toUtc())();
+  TextColumn get createdAt => text()
+      .map(const CanonicalInstantConverter())
+      .clientDefault(canonicalNowUtc)();
 
   TextColumn get createdBy => text().nullable().references(
     UserProfiles,
@@ -31,11 +35,13 @@ mixin StandardLedgerColumns on Table {
 mixin StandardMutableColumns on Table {
   TextColumn get id => text().clientDefault(IdGenerator.newId)();
 
-  DateTimeColumn get createdAt =>
-      dateTime().clientDefault(() => DateTime.now().toUtc())();
+  TextColumn get createdAt => text()
+      .map(const CanonicalInstantConverter())
+      .clientDefault(canonicalNowUtc)();
 
-  DateTimeColumn get updatedAt =>
-      dateTime().clientDefault(() => DateTime.now().toUtc())();
+  TextColumn get updatedAt => text()
+      .map(const CanonicalInstantConverter())
+      .clientDefault(canonicalNowUtc)();
 
   TextColumn get createdBy => text().nullable().references(
     UserProfiles,

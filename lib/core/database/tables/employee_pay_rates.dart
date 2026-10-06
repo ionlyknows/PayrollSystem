@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:goil_payroll_attendance/core/database/instant_converter.dart';
 import 'package:goil_payroll_attendance/core/database/standard_columns.dart';
 import 'package:goil_payroll_attendance/core/database/tables/employees.dart';
 import 'package:goil_payroll_attendance/core/database/tables/user_profiles.dart';
@@ -49,7 +50,8 @@ class EmployeePayRates extends Table with StandardLedgerColumns {
   TextColumn get reason => text().nullable()();
 
   /// Set only by the closing update of `effective_to`. Null on insert.
-  DateTimeColumn get updatedAt => dateTime().nullable()();
+  TextColumn get updatedAt =>
+      text().map(const CanonicalInstantConverter()).nullable()();
 
   /// Set only by the closing update. Null on insert.
   TextColumn get updatedBy => text().nullable().references(
@@ -60,7 +62,8 @@ class EmployeePayRates extends Table with StandardLedgerColumns {
   )();
 
   /// Voids a mistaken row without deleting it.
-  DateTimeColumn get voidedAt => dateTime().nullable()();
+  TextColumn get voidedAt =>
+      text().map(const CanonicalInstantConverter()).nullable()();
 
   TextColumn get voidedBy => text().nullable().references(
     UserProfiles,

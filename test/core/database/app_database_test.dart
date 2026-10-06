@@ -14,13 +14,13 @@ void main() {
     await db.close();
   });
 
-  test('declares schema version 2', () {
-    expect(db.schemaVersion, 2);
+  test('declares schema version 3', () {
+    expect(db.schemaVersion, 3);
   });
 
-  test('creates the database at schema version 2', () async {
+  test('creates the database at schema version 3', () async {
     final row = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(row.read<int>('user_version'), 2);
+    expect(row.read<int>('user_version'), 3);
   });
 
   test('has foreign keys enabled', () async {
