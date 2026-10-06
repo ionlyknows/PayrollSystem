@@ -4,7 +4,8 @@ Status: Phase 4.6.1. Specification only. Nothing in this document is implemented
 
 This document describes the intended database design. It adds no tables, code,
 dependencies, or sync behavior. Any item not fixed by the approved requirements is
-marked `OPEN DECISION (OD-nn)`. All open decisions are consolidated in section 11.
+marked `OPEN DECISION (OD-nn)`. Decisions resolved by the Project Manager are marked
+`RESOLVED (OD-nn)`. Resolved and open decisions are consolidated in section 11.
 No open decision may be silently resolved in code.
 
 ## 1. Database architecture overview
@@ -29,7 +30,7 @@ No open decision may be silently resolved in code.
 | Identity and passwords | None stored | Supabase Auth |
 | Authorization | Convenience checks only | Authoritative (row-level security and constraints) |
 | Strong integrity (non-overlap, immutability triggers) | Domain-layer enforcement, plus SQLite constraints where supported | Database constraints and triggers |
-| Sensitive final approval | Cannot complete offline | Requires online server authorization (scope: OD-19) |
+| Sensitive final actions (section 2.1) | Cannot be finalized offline | Requires online server authorization (RESOLVED, OD-19) |
 | Official payroll export | Only after Owner approval | Owner approval is verified server-side |
 | Audit log | Written locally, queued for upload | Authoritative, append-only |
 | Backup/restore | Local database file | Cloud-side backup is outside this specification (OD-26) |
@@ -41,6 +42,23 @@ Rules that follow from this:
 - Constraints PostgreSQL can enforce but SQLite cannot (such as exclusion constraints)
   must also be enforced by domain logic locally. The cloud is the final authority.
 
+### 2.1 Actions requiring online server authorization (RESOLVED, OD-19)
+
+The following actions require online server authorization:
+
+1. Owner final payroll approval.
+2. Owner payroll finalization/locking.
+3. Owner approval of a remittance shortage that will become a payroll deduction.
+4. Owner approval/release of CA/Vale.
+5. Other irreversible Owner-only financial actions that materially affect finalized financial records.
+
+These actions must not be finalized using local-only authorization while offline. Normal data
+entry, attendance recording, preparation, review, and other non-final workflows may continue
+offline under the approved offline-first design.
+
+Remaining open (OD-19): the specific actions covered by item 5 must be enumerated when each
+feature is specified, and how a server authorization is evidenced in stored rows is not yet designed.
+
 ## 3. UUID and timestamp conventions
 
 ### 3.1 Identifiers
@@ -49,19 +67,24 @@ Rules that follow from this:
 - The same `id` is used in the local and cloud databases. IDs are never reassigned.
 - Local storage type: TEXT (canonical lowercase hyphenated form). Cloud type: `uuid`.
 - Foreign keys are named `<entity>_id` and reference the parent's `id`.
-- OPEN DECISION (OD-01): UUID version (random v4 or time-ordered v7).
+- RESOLVED (OD-01): UUID version 4 (random) is used for all primary identifiers. It provides
+  globally unique identifiers suitable for offline-first operation and does not expose timestamps.
 - OPEN DECISION (OD-24): whether devices are identified by an approved `devices` table.
   Where this document mentions a `device_id` column, it is a UUID with no foreign key.
 
 ### 3.2 Timestamps and dates
 
 - Instants (`*_at` columns) are stored in UTC. Cloud type: `timestamptz`.
-- Calendar dates (`*_date`, `effective_from`, `effective_to`) have no time or zone.
-  They are interpreted in the business time zone.
-- OPEN DECISION (OD-03): the business time zone, to be held in `payroll_settings`.
-  It decides which calendar date an attendance instant belongs to.
-- OPEN DECISION (OD-02): the local representation of instants in SQLite (ISO-8601 UTC
-  text or integer epoch). It must be one representation, used for every table.
+- Calendar dates (`*_date`, `effective_from`, `effective_to`) have no time or zone. They are
+  stored locally as ISO 8601 date text (`YYYY-MM-DD`) and interpreted in the business time zone,
+  Asia/Manila (RESOLVED, OD-02 and OD-03).
+- RESOLVED (OD-03): the official business time zone is Asia/Manila. Payroll periods, attendance
+  dates, schedules, holidays, and all other business dates use Philippine business time. Payroll
+  and attendance calculations must never depend on the time zone of the computer or device they
+  run on. The zone decides which calendar date an instant belongs to.
+- RESOLVED (OD-02): SQLite uses ISO 8601 representation. Instants are stored as UTC ISO 8601
+  values. Business/local dates and displayed times are interpreted using Asia/Manila. One fixed
+  textual format is used for every table (for example always with the `Z` UTC designator).
 - Standard column names: `created_at`, `updated_at`, plus event-specific names such
   as `requested_at`, `reviewed_at`, `released_at`, `voided_at`.
 - A device clock is not fully trustworthy. Attendance and audit times recorded offline
@@ -88,15 +111,21 @@ Rules that follow from this:
 | text | `text` | TEXT |
 | int | `integer` | INTEGER |
 | bool | `boolean` | INTEGER (0/1) |
-| date | `date` | TEXT or INTEGER (same decision as OD-02) |
-| instant | `timestamptz` | per OD-02 |
-| money | `numeric(12,2)` | OPEN DECISION (OD-04): integer minor units or exact decimal text |
-| hours | `numeric(6,2)` | per OD-04 |
+| date | `date` | TEXT, ISO 8601 `YYYY-MM-DD` (OD-02) |
+| instant | `timestamptz` | TEXT, UTC ISO 8601 (OD-02) |
+| money | `bigint` (integer centavos) | INTEGER (integer centavos) (OD-04) |
+| hours | OPEN DECISION (OD-28) | OPEN DECISION (OD-28) |
 | json | `jsonb` | TEXT |
 
 - Floating-point types are never used for money or hours.
-- OPEN DECISION (OD-04): the currency. The approved requirements do not state one.
-  Until decided, the schema assumes a single currency for the whole system.
+- RESOLVED (OD-04): monetary values are stored as integer centavos in both the local and cloud
+  databases. Example: PHP 480.00 is stored as `48000`. Floating-point values are never used for
+  financial amounts. The unit is the Philippine peso.
+- OPEN DECISION (OD-28): the representation of hours and day quantities in both databases.
+  Half-hour quantities exist (for example the 0.5-hour lateness deduction), so whole-number
+  hours alone are not enough.
+- OPEN DECISION (OD-29): the rounding rule when a centavo amount is derived by division or by a
+  fractional quantity (for example hourly rate = daily rate / 12).
 
 ### 3.5 Naming and referential rules
 
@@ -150,7 +179,7 @@ Row classes:
 | 28 | business_rule_versions | V | Configuration |
 | 29 | audit_logs | L | Audit |
 | 30 | notifications | E | Notifications |
-| 31 | biometric_records | undecided (OD-21) | Biometrics |
+| 31 | biometric_records | event metadata only; provisional (OD-21) | Biometrics |
 | 32 | sync_queue | E | Sync |
 | 33 | sync_conflicts | E / L | Sync |
 | 34 | backup_records | L | Backup |
@@ -159,7 +188,8 @@ Row classes:
 
 Notation: "R" = required (NOT NULL), "N" = nullable. Each table also carries its
 standard column set (section 3.3) unless stated. Money columns are `money`, hours columns
-are `hours` (section 3.4). Every foreign key is `RESTRICT` (section 3.5).
+are `hours` (section 3.4). Every `money` column holds integer centavos (OD-04). Every foreign key is
+`RESTRICT` (section 3.5).
 
 ### 5.1 roles
 
@@ -270,7 +300,7 @@ are `hours` (section 3.4). Every foreign key is `RESTRICT` (section 3.5).
 | void_reason | text | N | |
 
 - **Foreign keys:** `employee_id` to `employees.id`; `voided_by` to `user_profiles.id`.
-- **Derived, not stored:** hourly rate = daily rate / 12. The 12 comes from the configured
+- **Derived, not stored:** hourly rate = daily rate / 12 (rounding to centavos: OPEN DECISION OD-29). The 12 comes from the configured
   standard shift length (section 5.28), never from a constant in code or schema.
 - **Unique/non-overlap rule (required):** for one employee, non-voided rows must never
   have overlapping effective periods.
@@ -529,6 +559,9 @@ are `hours` (section 3.4). Every foreign key is `RESTRICT` (section 3.5).
 - **Foreign keys:** `employee_id` to `employees.id`.
 - **Approved workflow the status must support:** Employee request, Manager approval,
   Owner approval, Release, Payroll deduction. Rejection and cancellation states are undecided (OD-16).
+- **Server authorization (RESOLVED, OD-19):** Owner approval and release of CA/Vale require online
+  server authorization and cannot be finalized offline. Non-final steps (such as the request and
+  Manager approval) may continue offline.
 - **Source of truth:** `advance_transactions`. The `status` column is a convenience copy,
   written in the same database transaction as the transaction row that changes it.
 - **CHECK:** `amount_approved IS NULL OR amount_approved >= 0`.
@@ -557,6 +590,9 @@ are `hours` (section 3.4). Every foreign key is `RESTRICT` (section 3.5).
 
 - **Foreign keys:** `cash_advance_id`, `actor_user_id`, `payroll_deduction_id`, `reverses_transaction_id`.
 - **Balance rule:** the outstanding balance is the sum of `balance_effect` for one advance.
+- **Server authorization (RESOLVED, OD-19):** rows of type owner approval and release are recorded
+  only after online server authorization. How that authorization is evidenced in the row is
+  OPEN DECISION (OD-19, remaining).
 - **Indexes:** `(cash_advance_id, occurred_at)`; `(payroll_deduction_id)`.
 - **History/audit:** Append-only. Corrections are reversing rows. This table, together with
   the header, makes the full chain request, approvals, release, deductions, and balance
@@ -600,12 +636,24 @@ are `hours` (section 3.4). Every foreign key is `RESTRICT` (section 3.5).
 - **Unique:** `(business_rule_version_id, rule_key)`.
 - **Indexes:** `(business_rule_version_id, sequence)`.
 - **History/audit:** Rows belonging to an approved or used version are immutable.
-- **Illustrative mapping of the approved late rule (values live in data, never in code):**
-  with a standard time-in of 6:00 AM, 6:01 to 6:14 is a 0.5-hour deduction, 6:15 to 6:59 is a
-  1-hour deduction, and each additional hour late adds a 1-hour deduction.
-- OPEN DECISION (OD-17): JSON parameters or a normalized tier structure (no extra table is
-  approved), the exact boundary for "each additional hour late" (for example whether
-  7:00 starts the next hour), and how the active version is selected.
+- **Late-deduction brackets (RESOLVED, OD-17; values live in data, never in code):** 6:15 AM is the
+  beginning of the 1-hour deduction bracket. With a standard time-in of 6:00 AM:
+
+| Arrival time | Deduction |
+|---|---|
+| 6:00 | none |
+| 6:01 to 6:14 | 0.5 hour |
+| 6:15 to 6:59 | 1 hour |
+| 7:00 to 7:59 | 2 hours |
+| 8:00 to 8:59 | 3 hours |
+| 9:00 to 9:59 | 4 hours |
+| and so on | same hourly progression |
+
+- The standard time-in is configurable, so the stored rule data defines the brackets relative to
+  it. Hourly rate = daily rate / 12, where 12 is the configured standard shift length.
+- OPEN DECISION (OD-17, remaining): JSON parameters or a normalized tier structure (no extra table
+  is approved), how seconds within a minute are treated, whether the progression has a cap (for
+  example as lateness approaches the shift length), and how the active version is selected.
 
 ### 5.19 remittance_records
 
@@ -680,7 +728,8 @@ are `hours` (section 3.4). Every foreign key is `RESTRICT` (section 3.5).
 - **Foreign keys:** `remittance_record_id`, `remittance_assignment_id`, `reviewer_user_id`.
 - **Indexes:** `(remittance_record_id, reviewed_at)`; `(review_stage, outcome)`.
 - **History/audit:** Append-only. Only an owner-approval row with an approving outcome may
-  authorize a payroll deduction. Owner approval is a sensitive action (scope: OD-19).
+  authorize a payroll deduction. Owner approval of a shortage that will become a payroll
+  deduction requires online server authorization (RESOLVED, OD-19).
 
 ### 5.22 payroll_periods
 
@@ -707,6 +756,9 @@ are `hours` (section 3.4). Every foreign key is `RESTRICT` (section 3.5).
   length is OPEN DECISION (OD-20); until decided, the 14-day length is validated in the
   domain layer against configuration.
 - **Indexes:** unique on `period_start`; `(status)`.
+- **Server authorization (RESOLVED, OD-19):** Owner final payroll approval and Owner payroll
+  finalization/locking require online server authorization and cannot be completed offline.
+  Preparation and review may continue offline.
 - **History/audit:** After finalization the period and all child rows are immutable.
   The cloud enforces this with triggers and policies; locally, the repository refuses
   writes. Official payroll export is allowed only after Owner approval.
@@ -833,7 +885,8 @@ are `hours` (section 3.4). Every foreign key is `RESTRICT` (section 3.5).
 - **Foreign keys:** none. **Unique:** `setting_key`. **Indexes:** unique on `setting_key`.
 - **History/audit:** Every change is audited with the old and new value. Settings that affect
   calculation of past or future pay must live in `business_rule_versions`, not here.
-- **Candidate contents (not yet decided):** business time zone (OD-03), first-period anchor (OD-20).
+- **Candidate contents (not yet decided):** first-period anchor (OD-20). The business time zone is
+  fixed as Asia/Manila by OD-03.
 - OPEN DECISION (OD-17): the exact boundary between `payroll_settings` and `business_rule_versions`.
 
 ### 5.28 business_rule_versions
@@ -916,13 +969,33 @@ are `hours` (section 3.4). Every foreign key is `RESTRICT` (section 3.5).
 
 ### 5.31 biometric_records
 
-- **Purpose:** UNDECIDED. The approved requirements list this table but do not say what it holds.
-- OPEN DECISION (OD-21): whether it holds enrollment metadata, per-event device punches, or
-  something else, and whether any raw biometric data may be stored at all.
-- **Provisional constraint (not a choice of content):** until OD-21 is decided, no raw biometric
-  templates or images are to be stored anywhere in the schema, and no other table references this one.
-- No column list is proposed until OD-21 is resolved. The privacy and legal impact of
-  storing biometric data should be reviewed before this table is designed.
+- **Purpose:** Biometric attendance event/reference metadata only (RESOLVED, OD-21).
+- **Primary key:** `id`. **Standard columns:** STD-L (provisional).
+- **Prohibited content (RESOLVED, OD-21):** raw fingerprint data, fingerprint images, biometric
+  templates, and equivalent sensitive biometric data are never stored in the application database.
+- **Provisional columns.** The exact fields depend on the client's biometric device/API (OD-21,
+  remaining), so the list and the nullability below are provisional:
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| employee_id | uuid | R | FK to `employees` |
+| device_id | uuid or text | R | Identifies the biometric device. No FK (OD-24). Type depends on the device |
+| biometric_event_id | text | R | Event identifier as supplied by the device/API |
+| event_timestamp | instant | R | When the event occurred |
+| event_type | text | R | Values: OPEN DECISION (OD-21) |
+| source | text | R | |
+| sync_status | text | R | Values: OPEN DECISION (OD-25) |
+
+- **Foreign keys:** `employee_id` to `employees.id`.
+- **Unique (proposed, provisional):** `(device_id, biometric_event_id)`, so a repeated import of the same event is idempotent.
+- **Indexes (proposed):** `(employee_id, event_timestamp)`; `(device_id, event_timestamp)`.
+- **Integration:** biometric integration goes through an adapter/integration layer when it is
+  implemented. Business logic does not depend on a device vendor API.
+- **History/audit:** The event facts are not edited after capture; `sync_status` is the only
+  column expected to change (provisional).
+- OPEN DECISION (OD-21, remaining): the actual biometric device brand, model, and API have not
+  been provided by the client. The exact fields, and how events become or relate to
+  `attendance_records` (see OD-11), stay open until they are.
 
 ### 5.32 sync_queue
 
@@ -1097,7 +1170,8 @@ Nothing here is implemented. It is recorded so the schema does not block a later
 - Conflict-sensitive tables, where two offline devices can legitimately collide:
   `employee_pay_rates`, `shift_assignments`, `attendance_records`, `payroll_periods`,
   `cash_advances`.
-- Final approval of payroll must be completed against the server and cannot complete offline.
+- The actions listed in section 2.1 (RESOLVED, OD-19) must be authorized by the server and cannot
+  be finalized offline. Preparation and other non-final workflows continue offline.
 - OPEN DECISION (OD-25): per-table conflict policy, tombstone handling, and server-time authority.
 
 ## 10. Migration and versioning considerations
@@ -1117,14 +1191,27 @@ Nothing here is implemented. It is recorded so the schema does not block a later
 - Changing a confirmed business rule is never done through a migration alone; it needs
   Project Manager approval first.
 
-## 11. Open technical decisions
+## 11. Decisions: resolved and open
+
+### 11.1 Resolved decisions
+
+Resolved by the Project Manager on 2026-10-06. OD-01 to OD-04 are fully resolved. For OD-17,
+OD-19, and OD-21, only the part shown here is resolved; the remainder stays open in 11.2.
+
+| ID | Resolved decision | Applied in |
+|---|---|---|
+| OD-01 | UUID v4 for all primary identifiers | 3.1 |
+| OD-02 | ISO 8601 representation; instants are UTC ISO 8601; business dates and displayed times are interpreted in Asia/Manila | 3.2, 3.4 |
+| OD-03 | Asia/Manila is the official business time zone; no dependence on the device time zone | 3.2 |
+| OD-04 | Money stored as integer centavos (PHP 480.00 = 48000); no floating point | 3.4, section 5 intro |
+| OD-17 (late-hour boundary only) | 6:15 AM starts the 1-hour bracket; 7:00 to 7:59 = 2 hours, continuing hourly; hourly rate = daily rate / 12 | 5.18 |
+| OD-19 (action list only) | Five Owner/final actions require online server authorization | 2.1, 5.15, 5.16, 5.21, 5.22, 9 |
+| OD-21 (storage decision only) | No raw biometric data; event/reference metadata only; adapter layer | 5.31 |
+
+### 11.2 Remaining open decisions
 
 | ID | Decision needed | Affects |
 |---|---|---|
-| OD-01 | UUID version (v4 random or v7 time-ordered) | All tables |
-| OD-02 | Local representation of instants and dates in SQLite | All tables |
-| OD-03 | Business time zone and where it is configured | Attendance, payroll periods |
-| OD-04 | Money storage locally (integer minor units or decimal text) and currency | All money columns |
 | OD-05 | Single or multiple roles per user; where the permission matrix lives | roles, user_profiles |
 | OD-06 | Employee-to-user relationship rules; whether an email copy is stored | employees, user_profiles |
 | OD-07 | Employment status values; personal and identification fields to collect; rehire | employees |
@@ -1137,17 +1224,19 @@ Nothing here is implemented. It is recorded so the schema does not block a later
 | OD-14 | Holiday types and pay effects; yearly recurrence | holidays |
 | OD-15 | Overtime definition, source, approval chain, multiplier | overtime_records |
 | OD-16 | CA/Vale: types, extra states, installments, partial release, when the deduction transaction is written, cached balance | cash_advances, advance_transactions |
-| OD-17 | Deduction categories beyond the approved ones; rule representation; exact boundary of "each additional hour late"; split between rule versions and settings; rule approval | deduction_categories, deduction_rules, business_rule_versions, payroll_settings |
+| OD-17 | Remaining: deduction categories beyond the approved ones; rule representation; seconds handling and any cap on the late progression; split between rule versions and settings; rule approval; how the active version is selected | deduction_categories, deduction_rules, business_rule_versions, payroll_settings |
 | OD-18 | Remittance: source of expected amount, amount corrections, shared responsibility, stages, outcomes, statuses | remittance_* tables |
-| OD-19 | Which actions count as "sensitive final approval" requiring online server authorization | Authorization design |
+| OD-19 | Remaining: enumerate the specific actions under "other irreversible Owner-only financial actions"; how server authorization is evidenced in stored rows | Authorization design |
 | OD-20 | Payroll: first-period anchor, payday, statuses, DB-level 14-day check, recalculation retention, earning granularity and types, adjustments, reopening, post-finalization corrections | payroll_* tables |
-| OD-21 | Purpose and content of biometric records; whether any raw biometric data may be stored | biometric_records |
+| OD-21 | Remaining: biometric device brand/model/API (not yet provided by the client); exact event fields; how events relate to attendance records | biometric_records |
 | OD-22 | Audited events, tamper evidence, retention, personal data in audit values | audit_logs |
 | OD-23 | Notification channels, origin, sync, and retention | notifications |
 | OD-24 | Whether a devices table is needed and how devices are identified | audit_logs, sync_queue |
 | OD-25 | Sync scope, per-table conflict policy, tombstones, server-time authority | sync_* tables |
 | OD-26 | Backup scope, encryption, location, restore authority, cloud reconciliation | backup_records |
 | OD-27 | Cloud migration tooling; local/cloud compatibility policy | Migrations |
+| OD-28 | Representation of hours and day quantities (half-hours exist) in the local and cloud databases | All hours columns |
+| OD-29 | Rounding rule for centavo amounts derived by division or fractional quantities (for example hourly rate = daily rate / 12) | employee_pay_rates, payroll_records, payroll_earnings, payroll_deductions |
 
 Resolution of any open decision requires Project Manager approval. This document is then updated
 in the same change that records the decision.
