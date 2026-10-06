@@ -39,13 +39,13 @@ void main() {
     final row = await db.customSelect('SELECT 1 AS one').getSingle();
 
     expect(row.read<int>('one'), 1);
-    expect(db.schemaVersion, 1);
+    expect(db.schemaVersion, AppDatabase.currentSchemaVersion);
   });
 
   test('a repository implementation receives the database', () async {
     final _SchemaVersionReader reader = _DriftSchemaVersionReader(db);
 
-    expect(await reader.readUserVersion(), 1);
+    expect(await reader.readUserVersion(), AppDatabase.currentSchemaVersion);
   });
 
   test('a basic transaction runs and returns its result', () async {
@@ -65,7 +65,7 @@ void main() {
 
     final version = await runner.run(reader.readUserVersion);
 
-    expect(version, 1);
+    expect(version, AppDatabase.currentSchemaVersion);
   });
 
   test('an error inside a transaction reaches the caller', () async {
