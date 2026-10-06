@@ -1,0 +1,7 @@
+targets:
+  $default:
+    builders:
+      drift_dev:
+        options:
+          # OD-02: DateTime values are stored as ISO 8601 text, not unix integers.
+          store_date_time_values_as_text: true
