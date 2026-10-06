@@ -114,18 +114,25 @@ feature is specified, and how a server authorization is evidenced in stored rows
 | date | `date` | TEXT, ISO 8601 `YYYY-MM-DD` (OD-02) |
 | instant | `timestamptz` | TEXT, UTC ISO 8601 (OD-02) |
 | money | `bigint` (integer centavos) | INTEGER (integer centavos) (OD-04) |
-| hours | OPEN DECISION (OD-28) | OPEN DECISION (OD-28) |
+| duration | `integer` (minutes) | INTEGER (minutes) (OD-28) |
 | json | `jsonb` | TEXT |
 
 - Floating-point types are never used for money or hours.
 - RESOLVED (OD-04): monetary values are stored as integer centavos in both the local and cloud
   databases. Example: PHP 480.00 is stored as `48000`. Floating-point values are never used for
   financial amounts. The unit is the Philippine peso.
-- OPEN DECISION (OD-28): the representation of hours and day quantities in both databases.
-  Half-hour quantities exist (for example the 0.5-hour lateness deduction), so whole-number
-  hours alone are not enough.
-- OPEN DECISION (OD-29): the rounding rule when a centavo amount is derived by division or by a
-  fractional quantity (for example hourly rate = daily rate / 12).
+- RESOLVED (OD-28): durations are stored as integer minutes in both the local and cloud databases
+  (logical type `duration`). Examples: 30 minutes = 30, 1 hour = 60, 1.5 hours = 90, a 12-hour
+  shift = 720. Payroll and attendance calculations derive hours from minutes. Floating-point
+  hour values are never stored for durations. Columns holding durations are named `*_minutes`.
+  Leave quantities (days) are not durations in this sense and stay open under OD-13.
+- RESOLVED (OD-29): all payroll calculations use centavo-safe integer arithmetic, with no
+  floating point. When a calculation produces a fraction of a centavo, the result is rounded to
+  the nearest centavo using half-up rounding. Examples: PHP 10.004 becomes PHP 10.00 and
+  PHP 10.005 becomes PHP 10.01.
+- OPEN DECISION (OD-30): where rounding is applied (per line item, per record, or only on totals)
+  and how half-up applies to negative amounts such as adjustments. OD-29 fixes the rounding mode,
+  not these points.
 
 ### 3.5 Naming and referential rules
 
@@ -188,7 +195,7 @@ Row classes:
 
 Notation: "R" = required (NOT NULL), "N" = nullable. Each table also carries its
 standard column set (section 3.3) unless stated. Money columns are `money`, hours columns
-are `hours` (section 3.4). Every `money` column holds integer centavos (OD-04). Every foreign key is
+are `duration` (integer minutes, OD-28). Every `money` column holds integer centavos (OD-04). Every foreign key is
 `RESTRICT` (section 3.5).
 
 ### 5.1 roles
@@ -300,7 +307,7 @@ are `hours` (section 3.4). Every `money` column holds integer centavos (OD-04). 
 | void_reason | text | N | |
 
 - **Foreign keys:** `employee_id` to `employees.id`; `voided_by` to `user_profiles.id`.
-- **Derived, not stored:** hourly rate = daily rate / 12 (rounding to centavos: OPEN DECISION OD-29). The 12 comes from the configured
+- **Derived, not stored:** hourly rate = daily rate / 12 (rounded half-up to the nearest centavo, OD-29; where rounding is applied: OPEN DECISION OD-30). The 12 comes from the configured
   standard shift length (section 5.28), never from a constant in code or schema.
 - **Unique/non-overlap rule (required):** for one employee, non-voided rows must never
   have overlapping effective periods.
@@ -456,7 +463,7 @@ are `hours` (section 3.4). Every `money` column holds integer centavos (OD-04). 
 | leave_type_id | uuid | R | FK to `leave_types` |
 | start_date | date | R | |
 | end_date | date | R | |
-| requested_days | hours | R | Stored as a decimal quantity so half-days remain possible (OD-13) |
+| requested_days | OPEN DECISION (OD-13) | R | Unit (days or minutes) depends on the leave rules. OD-28 covers durations only |
 | reason | text | N | |
 | status | text | R | Values: OPEN DECISION (OD-13) |
 | requested_at | instant | R | |
@@ -484,7 +491,7 @@ are `hours` (section 3.4). Every `money` column holds integer centavos (OD-04). 
 | leave_type_id | uuid | R | FK to `leave_types` |
 | leave_request_id | uuid | N | FK to `leave_requests` |
 | transaction_type | text | R | Values: OPEN DECISION (OD-13) |
-| quantity | hours | R | Signed quantity |
+| quantity | OPEN DECISION (OD-13) | R | Signed quantity. Unit (days or minutes) depends on the leave rules |
 | effective_date | date | R | |
 | reason | text | N | |
 | reverses_transaction_id | uuid | N | FK to `leave_transactions` |
@@ -524,7 +531,7 @@ are `hours` (section 3.4). Every `money` column holds integer centavos (OD-04). 
 | employee_id | uuid | R | FK to `employees` |
 | attendance_record_id | uuid | N | FK to `attendance_records` |
 | work_date | date | R | |
-| overtime_hours | hours | R | Must be greater than 0 |
+| overtime_minutes | duration | R | Integer minutes. Must be greater than 0 |
 | reason | text | N | |
 | status | text | R | Values: OPEN DECISION (OD-15) |
 | requested_by | uuid | R | FK to `user_profiles` |
@@ -806,7 +813,7 @@ are `hours` (section 3.4). Every `money` column holds integer centavos (OD-04). 
 | payroll_record_id | uuid | R | FK to `payroll_records` |
 | earning_type | text | R | Values: OPEN DECISION (OD-20) |
 | description | text | N | |
-| quantity | hours | N | Days or hours, depending on type |
+| quantity | int | N | Minutes for time-based lines. Units for other line types: OPEN DECISION (OD-20) |
 | rate_applied | money | N | |
 | amount | money | R | |
 | attendance_record_id | uuid | N | FK to `attendance_records` |
@@ -829,7 +836,7 @@ are `hours` (section 3.4). Every `money` column holds integer centavos (OD-04). 
 | payroll_record_id | uuid | R | FK to `payroll_records` |
 | deduction_category_id | uuid | R | FK to `deduction_categories` |
 | description | text | N | |
-| deduction_hours | hours | N | For lateness lines |
+| deduction_minutes | duration | N | Integer minutes. For lateness lines (for example 0.5 hour = 30) |
 | rate_applied | money | N | |
 | amount | money | R | |
 | deduction_rule_id | uuid | N | FK to `deduction_rules`; the rule applied |
@@ -1195,7 +1202,7 @@ Nothing here is implemented. It is recorded so the schema does not block a later
 
 ### 11.1 Resolved decisions
 
-Resolved by the Project Manager on 2026-10-06. OD-01 to OD-04 are fully resolved. For OD-17,
+Resolved by the Project Manager on 2026-10-06. OD-01 to OD-04, OD-28 and OD-29 are fully resolved. For OD-17,
 OD-19, and OD-21, only the part shown here is resolved; the remainder stays open in 11.2.
 
 | ID | Resolved decision | Applied in |
@@ -1207,6 +1214,8 @@ OD-19, and OD-21, only the part shown here is resolved; the remainder stays open
 | OD-17 (late-hour boundary only) | 6:15 AM starts the 1-hour bracket; 7:00 to 7:59 = 2 hours, continuing hourly; hourly rate = daily rate / 12 | 5.18 |
 | OD-19 (action list only) | Five Owner/final actions require online server authorization | 2.1, 5.15, 5.16, 5.21, 5.22, 9 |
 | OD-21 (storage decision only) | No raw biometric data; event/reference metadata only; adapter layer | 5.31 |
+| OD-28 | Durations stored as integer minutes (30 = 30, 1 hour = 60, 12-hour shift = 720); hours derived from minutes; no floating-point hours | 3.4, 5.14, 5.24, 5.25 |
+| OD-29 | Integer centavos with centavo-safe arithmetic; fractions rounded to the nearest centavo, half-up (PHP 10.004 = 10.00, PHP 10.005 = 10.01) | 3.4, 5.5 |
 
 ### 11.2 Remaining open decisions
 
@@ -1235,8 +1244,7 @@ OD-19, and OD-21, only the part shown here is resolved; the remainder stays open
 | OD-25 | Sync scope, per-table conflict policy, tombstones, server-time authority | sync_* tables |
 | OD-26 | Backup scope, encryption, location, restore authority, cloud reconciliation | backup_records |
 | OD-27 | Cloud migration tooling; local/cloud compatibility policy | Migrations |
-| OD-28 | Representation of hours and day quantities (half-hours exist) in the local and cloud databases | All hours columns |
-| OD-29 | Rounding rule for centavo amounts derived by division or fractional quantities (for example hourly rate = daily rate / 12) | employee_pay_rates, payroll_records, payroll_earnings, payroll_deductions |
+| OD-30 | Where rounding is applied (per line, per record, or totals only) and how half-up applies to negative amounts | payroll_records, payroll_earnings, payroll_deductions, payroll_adjustments |
 
 Resolution of any open decision requires Project Manager approval. This document is then updated
 in the same change that records the decision.
