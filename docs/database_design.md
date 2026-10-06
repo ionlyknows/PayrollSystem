@@ -102,6 +102,15 @@ feature is specified, and how a server authorization is evidenced in stored rows
   system-generated rows (such as seed data).
 - Append-only rows are never updated or deleted. A mistake is fixed by adding a new
   reversing or superseding row.
+- Documented exception: `employee_pay_rates` (section 5.5) is a closed-and-replaced historical
+  table. It uses the STD-L columns plus `updated_at` and `updated_by`, and it permits exactly two
+  controlled post-insert mutation types:
+  1. Closing: set `effective_to`, `updated_at` and `updated_by`.
+  2. Voiding: set `voided_at`, `voided_by` and `void_reason`.
+
+  No other pay-rate value is modified after insertion. `updated_at` and `updated_by` stay NULL on
+  initial insert and are set only by the closing update. Voiding does not require `updated_at` or
+  `updated_by`.
 
 ### 3.4 Data types
 
@@ -305,7 +314,10 @@ are `duration` (integer minutes, OD-28). Every `money` column holds integer cent
 ### 5.5 employee_pay_rates
 
 - **Purpose:** Effective-dated daily rate per employee. This is the only source of pay rates.
-- **Primary key:** `id`. **Standard columns:** STD-L plus the void columns below.
+- **Primary key:** `id`. **Standard columns:** STD-L plus `updated_at` and `updated_by`, plus the void columns below.
+  This table is a documented exception to the STD-L immutability rule (section 3.3): it permits
+  two controlled post-insert mutations, closing (`effective_to`, `updated_at`, `updated_by`) and
+  voiding (`voided_at`, `voided_by`, `void_reason`).
 
 | Column | Type | Null | Notes |
 |---|---|---|---|
@@ -314,11 +326,14 @@ are `duration` (integer minutes, OD-28). Every `money` column holds integer cent
 | effective_from | date | R | First day the rate applies |
 | effective_to | date | N | Null means open-ended (currently in force) |
 | reason | text | N | |
+| updated_at | instant | N | Set only by the closing update of `effective_to`. Null until then |
+| updated_by | uuid | N | FK to `user_profiles`. Set only by the closing update. Null until then |
 | voided_at | instant | N | Voids a mistaken row without deleting it |
 | voided_by | uuid | N | FK to `user_profiles` |
 | void_reason | text | N | |
 
-- **Foreign keys:** `employee_id` to `employees.id`; `voided_by` to `user_profiles.id`.
+- **Foreign keys:** `employee_id` to `employees.id`; `updated_by` to `user_profiles.id`;
+  `voided_by` to `user_profiles.id`.
 - **Derived, not stored:** hourly rate = daily rate / 12 (rounded half-up to the nearest centavo per line, OD-29 and OD-30). The 12 comes from the configured
   standard shift length (section 5.28), never from a constant in code or schema.
 - **Unique/non-overlap rule (required):** for one employee, non-voided rows must never
@@ -331,9 +346,13 @@ are `duration` (integer minutes, OD-28). Every `money` column holds integer cent
     (partial unique index).
 - **CHECK:** `effective_to IS NULL OR effective_to >= effective_from` (final form depends on OD-09).
 - **Indexes:** `(employee_id, effective_from)`; partial unique index for the open-ended row.
-- **History/audit:** Rates are never updated in place. A change closes the current row
-  (setting `effective_to`) and inserts a new row. The close is the one permitted edit,
-  and it is audited. Payroll snapshots copy the rate used, so later rate changes never
+- **History/audit:** Rate values are never changed in place: `employee_id`, `daily_rate` and
+  `effective_from` are not edited after insert. A rate change closes the current row by setting
+  `effective_to`, then inserts a new row. The closing update must record `updated_at` and
+  `updated_by` (both NULL on initial insert), and it is audited. Voiding a mistaken row sets
+  `voided_at`, `voided_by` and `void_reason` only, and is also audited. No other post-insert
+  mutation is permitted. No separate closed-at or closed-by columns exist. Payroll snapshots copy
+  the rate used, so later rate changes never
   alter finalized payroll.
 - OPEN DECISION (OD-09): whether `effective_to` is inclusive or exclusive (a half-open
   range `[from, to)` is recommended, but not confirmed), whether rate changes need approval

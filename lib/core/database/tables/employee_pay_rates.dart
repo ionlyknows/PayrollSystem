@@ -17,6 +17,13 @@ import 'package:goil_payroll_attendance/core/database/tables/user_profiles.dart'
 /// added here. Whether `effective_to` is inclusive or exclusive (OD-09) is
 /// still open; nothing in this schema depends on the answer.
 ///
+/// Controlled post-insert mutations (design 3.3 and 5.5), and nothing else:
+///   * closing: set `effective_to`, `updated_at`, `updated_by`;
+///   * voiding: set `voided_at`, `voided_by`, `void_reason`.
+/// `updated_at` and `updated_by` stay NULL on insert. This is enforced by
+/// the repository layer later, not by triggers. There are no closed_at or
+/// closed_by columns.
+///
 /// No pay rate is ever hard-coded; rows only come from user input.
 @TableIndex(
   name: 'idx_employee_pay_rates_employee_effective_from',
@@ -40,6 +47,17 @@ class EmployeePayRates extends Table with StandardLedgerColumns {
   TextColumn get effectiveTo => text().nullable()();
 
   TextColumn get reason => text().nullable()();
+
+  /// Set only by the closing update of `effective_to`. Null on insert.
+  DateTimeColumn get updatedAt => dateTime().nullable()();
+
+  /// Set only by the closing update. Null on insert.
+  TextColumn get updatedBy => text().nullable().references(
+    UserProfiles,
+    #id,
+    onUpdate: KeyAction.restrict,
+    onDelete: KeyAction.restrict,
+  )();
 
   /// Voids a mistaken row without deleting it.
   DateTimeColumn get voidedAt => dateTime().nullable()();

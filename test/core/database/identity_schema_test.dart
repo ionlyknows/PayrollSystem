@@ -625,6 +625,151 @@ void main() {
     });
   });
 
+  group('pay rate audit columns (design 5.5)', () {
+    const missing = '00000000-0000-4000-8000-000000000000';
+
+    test('updated_at and updated_by are nullable and null on insert', () async {
+      final employeeId = await _insertEmployee(db);
+      await _insertPayRate(db, employeeId);
+
+      final row = (await db.select(db.employeePayRates).get()).single;
+      expect(row.updatedAt, isNull);
+      expect(row.updatedBy, isNull);
+    });
+
+    test(
+      'the table has the audit columns and no closed_at/closed_by',
+      () async {
+        final info = await db
+            .customSelect('PRAGMA table_info(employee_pay_rates)')
+            .get();
+        final notNull = {
+          for (final r in info) r.read<String>('name'): r.read<int>('notnull'),
+        };
+
+        expect(notNull['updated_at'], 0);
+        expect(notNull['updated_by'], 0);
+        expect(notNull.containsKey('closed_at'), isFalse);
+        expect(notNull.containsKey('closed_by'), isFalse);
+      },
+    );
+
+    test('updated_by has a RESTRICT foreign key to user_profiles', () async {
+      final fks = await db
+          .customSelect('PRAGMA foreign_key_list(employee_pay_rates)')
+          .get();
+      final updatedBy = fks.where(
+        (r) => r.read<String>('from') == 'updated_by',
+      );
+
+      expect(updatedBy, hasLength(1));
+      expect(updatedBy.single.read<String>('table'), 'user_profiles');
+      expect(updatedBy.single.read<String>('to'), 'id');
+      expect(updatedBy.single.read<String>('on_delete'), 'RESTRICT');
+      expect(updatedBy.single.read<String>('on_update'), 'RESTRICT');
+    });
+
+    test('closing records effective_to, updated_at and updated_by', () async {
+      final roleId = await _insertRole(db);
+      final profileId = await _insertProfile(db, roleId);
+      final employeeId = await _insertEmployee(db);
+      final rateId = await _insertPayRate(db, employeeId, from: '2026-01-01');
+
+      await (db.update(
+        db.employeePayRates,
+      )..where((t) => t.id.equals(rateId))).write(
+        EmployeePayRatesCompanion(
+          effectiveTo: const Value('2026-06-30'),
+          updatedAt: Value(DateTime.utc(2026, 7, 1)),
+          updatedBy: Value(profileId),
+        ),
+      );
+
+      final row = await (db.select(
+        db.employeePayRates,
+      )..where((t) => t.id.equals(rateId))).getSingle();
+      expect(row.effectiveTo, '2026-06-30');
+      expect(row.updatedAt, isNotNull);
+      expect(row.updatedBy, profileId);
+
+      final stored = await db
+          .customSelect('SELECT updated_at FROM employee_pay_rates')
+          .getSingle();
+      expect(stored.read<String>('updated_at'), endsWith('Z'));
+    });
+
+    test('updated_by accepts a valid user profile on insert', () async {
+      final roleId = await _insertRole(db);
+      final profileId = await _insertProfile(db, roleId);
+      final employeeId = await _insertEmployee(db);
+
+      await db
+          .into(db.employeePayRates)
+          .insert(
+            EmployeePayRatesCompanion.insert(
+              employeeId: employeeId,
+              dailyRate: 48000,
+              effectiveFrom: '2026-01-01',
+              updatedBy: Value(profileId),
+            ),
+          );
+
+      final row = (await db.select(db.employeePayRates).get()).single;
+      expect(row.updatedBy, profileId);
+    });
+
+    test('an invalid updated_by is rejected on insert', () async {
+      final employeeId = await _insertEmployee(db);
+
+      await expectLater(
+        db
+            .into(db.employeePayRates)
+            .insert(
+              EmployeePayRatesCompanion.insert(
+                employeeId: employeeId,
+                dailyRate: 48000,
+                effectiveFrom: '2026-01-01',
+                updatedBy: const Value(missing),
+              ),
+            ),
+        _failsWith('foreign key constraint'),
+      );
+    });
+
+    test('an invalid updated_by is rejected on update', () async {
+      final employeeId = await _insertEmployee(db);
+      final rateId = await _insertPayRate(db, employeeId);
+
+      await expectLater(
+        (db.update(db.employeePayRates)..where((t) => t.id.equals(rateId)))
+            .write(const EmployeePayRatesCompanion(updatedBy: Value(missing))),
+        _failsWith('foreign key constraint'),
+      );
+    });
+
+    test('a referenced profile cannot be deleted while updated_by uses it '
+        '(RESTRICT)', () async {
+      final roleId = await _insertRole(db);
+      final profileId = await _insertProfile(db, roleId);
+      final employeeId = await _insertEmployee(db);
+      await db
+          .into(db.employeePayRates)
+          .insert(
+            EmployeePayRatesCompanion.insert(
+              employeeId: employeeId,
+              dailyRate: 48000,
+              effectiveFrom: '2026-01-01',
+              updatedBy: Value(profileId),
+            ),
+          );
+
+      await expectLater(
+        db.delete(db.userProfiles).go(),
+        _failsWith('foreign key constraint'),
+      );
+    });
+  });
+
   group('transaction rollback', () {
     test('a failure after a valid insert rolls the insert back', () async {
       final runner = DriftTransactionRunner(db);

@@ -2765,6 +2765,31 @@ class $EmployeePayRatesTable extends EmployeePayRates
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedByMeta = const VerificationMeta(
+    'updatedBy',
+  );
+  @override
+  late final GeneratedColumn<String> updatedBy = GeneratedColumn<String>(
+    'updated_by',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES user_profiles (id) ON UPDATE RESTRICT ON DELETE RESTRICT',
+    ),
+  );
   static const VerificationMeta _voidedAtMeta = const VerificationMeta(
     'voidedAt',
   );
@@ -2811,6 +2836,8 @@ class $EmployeePayRatesTable extends EmployeePayRates
     effectiveFrom,
     effectiveTo,
     reason,
+    updatedAt,
+    updatedBy,
     voidedAt,
     voidedBy,
     voidReason,
@@ -2884,6 +2911,18 @@ class $EmployeePayRatesTable extends EmployeePayRates
         reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
       );
     }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('updated_by')) {
+      context.handle(
+        _updatedByMeta,
+        updatedBy.isAcceptableOrUnknown(data['updated_by']!, _updatedByMeta),
+      );
+    }
     if (data.containsKey('voided_at')) {
       context.handle(
         _voidedAtMeta,
@@ -2943,6 +2982,14 @@ class $EmployeePayRatesTable extends EmployeePayRates
         DriftSqlType.string,
         data['${effectivePrefix}reason'],
       ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      ),
+      updatedBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}updated_by'],
+      ),
       voidedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}voided_at'],
@@ -2980,6 +3027,12 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
   final String? effectiveTo;
   final String? reason;
 
+  /// Set only by the closing update of `effective_to`. Null on insert.
+  final DateTime? updatedAt;
+
+  /// Set only by the closing update. Null on insert.
+  final String? updatedBy;
+
   /// Voids a mistaken row without deleting it.
   final DateTime? voidedAt;
   final String? voidedBy;
@@ -2993,6 +3046,8 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
     required this.effectiveFrom,
     this.effectiveTo,
     this.reason,
+    this.updatedAt,
+    this.updatedBy,
     this.voidedAt,
     this.voidedBy,
     this.voidReason,
@@ -3013,6 +3068,12 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
     }
     if (!nullToAbsent || reason != null) {
       map['reason'] = Variable<String>(reason);
+    }
+    if (!nullToAbsent || updatedAt != null) {
+      map['updated_at'] = Variable<DateTime>(updatedAt);
+    }
+    if (!nullToAbsent || updatedBy != null) {
+      map['updated_by'] = Variable<String>(updatedBy);
     }
     if (!nullToAbsent || voidedAt != null) {
       map['voided_at'] = Variable<DateTime>(voidedAt);
@@ -3042,6 +3103,12 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
       reason: reason == null && nullToAbsent
           ? const Value.absent()
           : Value(reason),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
+      updatedBy: updatedBy == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedBy),
       voidedAt: voidedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(voidedAt),
@@ -3068,6 +3135,8 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
       effectiveFrom: serializer.fromJson<String>(json['effectiveFrom']),
       effectiveTo: serializer.fromJson<String?>(json['effectiveTo']),
       reason: serializer.fromJson<String?>(json['reason']),
+      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
+      updatedBy: serializer.fromJson<String?>(json['updatedBy']),
       voidedAt: serializer.fromJson<DateTime?>(json['voidedAt']),
       voidedBy: serializer.fromJson<String?>(json['voidedBy']),
       voidReason: serializer.fromJson<String?>(json['voidReason']),
@@ -3085,6 +3154,8 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
       'effectiveFrom': serializer.toJson<String>(effectiveFrom),
       'effectiveTo': serializer.toJson<String?>(effectiveTo),
       'reason': serializer.toJson<String?>(reason),
+      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
+      'updatedBy': serializer.toJson<String?>(updatedBy),
       'voidedAt': serializer.toJson<DateTime?>(voidedAt),
       'voidedBy': serializer.toJson<String?>(voidedBy),
       'voidReason': serializer.toJson<String?>(voidReason),
@@ -3100,6 +3171,8 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
     String? effectiveFrom,
     Value<String?> effectiveTo = const Value.absent(),
     Value<String?> reason = const Value.absent(),
+    Value<DateTime?> updatedAt = const Value.absent(),
+    Value<String?> updatedBy = const Value.absent(),
     Value<DateTime?> voidedAt = const Value.absent(),
     Value<String?> voidedBy = const Value.absent(),
     Value<String?> voidReason = const Value.absent(),
@@ -3112,6 +3185,8 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
     effectiveFrom: effectiveFrom ?? this.effectiveFrom,
     effectiveTo: effectiveTo.present ? effectiveTo.value : this.effectiveTo,
     reason: reason.present ? reason.value : this.reason,
+    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
+    updatedBy: updatedBy.present ? updatedBy.value : this.updatedBy,
     voidedAt: voidedAt.present ? voidedAt.value : this.voidedAt,
     voidedBy: voidedBy.present ? voidedBy.value : this.voidedBy,
     voidReason: voidReason.present ? voidReason.value : this.voidReason,
@@ -3132,6 +3207,8 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
           ? data.effectiveTo.value
           : this.effectiveTo,
       reason: data.reason.present ? data.reason.value : this.reason,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      updatedBy: data.updatedBy.present ? data.updatedBy.value : this.updatedBy,
       voidedAt: data.voidedAt.present ? data.voidedAt.value : this.voidedAt,
       voidedBy: data.voidedBy.present ? data.voidedBy.value : this.voidedBy,
       voidReason: data.voidReason.present
@@ -3151,6 +3228,8 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
           ..write('effectiveFrom: $effectiveFrom, ')
           ..write('effectiveTo: $effectiveTo, ')
           ..write('reason: $reason, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('updatedBy: $updatedBy, ')
           ..write('voidedAt: $voidedAt, ')
           ..write('voidedBy: $voidedBy, ')
           ..write('voidReason: $voidReason')
@@ -3168,6 +3247,8 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
     effectiveFrom,
     effectiveTo,
     reason,
+    updatedAt,
+    updatedBy,
     voidedAt,
     voidedBy,
     voidReason,
@@ -3184,6 +3265,8 @@ class EmployeePayRate extends DataClass implements Insertable<EmployeePayRate> {
           other.effectiveFrom == this.effectiveFrom &&
           other.effectiveTo == this.effectiveTo &&
           other.reason == this.reason &&
+          other.updatedAt == this.updatedAt &&
+          other.updatedBy == this.updatedBy &&
           other.voidedAt == this.voidedAt &&
           other.voidedBy == this.voidedBy &&
           other.voidReason == this.voidReason);
@@ -3198,6 +3281,8 @@ class EmployeePayRatesCompanion extends UpdateCompanion<EmployeePayRate> {
   final Value<String> effectiveFrom;
   final Value<String?> effectiveTo;
   final Value<String?> reason;
+  final Value<DateTime?> updatedAt;
+  final Value<String?> updatedBy;
   final Value<DateTime?> voidedAt;
   final Value<String?> voidedBy;
   final Value<String?> voidReason;
@@ -3211,6 +3296,8 @@ class EmployeePayRatesCompanion extends UpdateCompanion<EmployeePayRate> {
     this.effectiveFrom = const Value.absent(),
     this.effectiveTo = const Value.absent(),
     this.reason = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.updatedBy = const Value.absent(),
     this.voidedAt = const Value.absent(),
     this.voidedBy = const Value.absent(),
     this.voidReason = const Value.absent(),
@@ -3225,6 +3312,8 @@ class EmployeePayRatesCompanion extends UpdateCompanion<EmployeePayRate> {
     required String effectiveFrom,
     this.effectiveTo = const Value.absent(),
     this.reason = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.updatedBy = const Value.absent(),
     this.voidedAt = const Value.absent(),
     this.voidedBy = const Value.absent(),
     this.voidReason = const Value.absent(),
@@ -3241,6 +3330,8 @@ class EmployeePayRatesCompanion extends UpdateCompanion<EmployeePayRate> {
     Expression<String>? effectiveFrom,
     Expression<String>? effectiveTo,
     Expression<String>? reason,
+    Expression<DateTime>? updatedAt,
+    Expression<String>? updatedBy,
     Expression<DateTime>? voidedAt,
     Expression<String>? voidedBy,
     Expression<String>? voidReason,
@@ -3255,6 +3346,8 @@ class EmployeePayRatesCompanion extends UpdateCompanion<EmployeePayRate> {
       if (effectiveFrom != null) 'effective_from': effectiveFrom,
       if (effectiveTo != null) 'effective_to': effectiveTo,
       if (reason != null) 'reason': reason,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (updatedBy != null) 'updated_by': updatedBy,
       if (voidedAt != null) 'voided_at': voidedAt,
       if (voidedBy != null) 'voided_by': voidedBy,
       if (voidReason != null) 'void_reason': voidReason,
@@ -3271,6 +3364,8 @@ class EmployeePayRatesCompanion extends UpdateCompanion<EmployeePayRate> {
     Value<String>? effectiveFrom,
     Value<String?>? effectiveTo,
     Value<String?>? reason,
+    Value<DateTime?>? updatedAt,
+    Value<String?>? updatedBy,
     Value<DateTime?>? voidedAt,
     Value<String?>? voidedBy,
     Value<String?>? voidReason,
@@ -3285,6 +3380,8 @@ class EmployeePayRatesCompanion extends UpdateCompanion<EmployeePayRate> {
       effectiveFrom: effectiveFrom ?? this.effectiveFrom,
       effectiveTo: effectiveTo ?? this.effectiveTo,
       reason: reason ?? this.reason,
+      updatedAt: updatedAt ?? this.updatedAt,
+      updatedBy: updatedBy ?? this.updatedBy,
       voidedAt: voidedAt ?? this.voidedAt,
       voidedBy: voidedBy ?? this.voidedBy,
       voidReason: voidReason ?? this.voidReason,
@@ -3319,6 +3416,12 @@ class EmployeePayRatesCompanion extends UpdateCompanion<EmployeePayRate> {
     if (reason.present) {
       map['reason'] = Variable<String>(reason.value);
     }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (updatedBy.present) {
+      map['updated_by'] = Variable<String>(updatedBy.value);
+    }
     if (voidedAt.present) {
       map['voided_at'] = Variable<DateTime>(voidedAt.value);
     }
@@ -3345,6 +3448,8 @@ class EmployeePayRatesCompanion extends UpdateCompanion<EmployeePayRate> {
           ..write('effectiveFrom: $effectiveFrom, ')
           ..write('effectiveTo: $effectiveTo, ')
           ..write('reason: $reason, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('updatedBy: $updatedBy, ')
           ..write('voidedAt: $voidedAt, ')
           ..write('voidedBy: $voidedBy, ')
           ..write('voidReason: $voidReason, ')
@@ -6023,6 +6128,8 @@ typedef $$EmployeePayRatesTableCreateCompanionBuilder =
       required String effectiveFrom,
       Value<String?> effectiveTo,
       Value<String?> reason,
+      Value<DateTime?> updatedAt,
+      Value<String?> updatedBy,
       Value<DateTime?> voidedAt,
       Value<String?> voidedBy,
       Value<String?> voidReason,
@@ -6038,6 +6145,8 @@ typedef $$EmployeePayRatesTableUpdateCompanionBuilder =
       Value<String> effectiveFrom,
       Value<String?> effectiveTo,
       Value<String?> reason,
+      Value<DateTime?> updatedAt,
+      Value<String?> updatedBy,
       Value<DateTime?> voidedAt,
       Value<String?> voidedBy,
       Value<String?> voidReason,
@@ -6081,6 +6190,23 @@ final class $$EmployeePayRatesTableReferences
       $_db.employees,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_employeeIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $UserProfilesTable _updatedByTable(_$AppDatabase db) => db.userProfiles
+      .createAlias('employee_pay_rates__updated_by__user_profiles__id');
+
+  $$UserProfilesTableProcessedTableManager? get updatedBy {
+    final $_column = $_itemColumn<String>('updated_by');
+    if ($_column == null) return null;
+    final manager = $$UserProfilesTableTableManager(
+      $_db,
+      $_db.userProfiles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_updatedByTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -6144,6 +6270,11 @@ class $$EmployeePayRatesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get voidedAt => $composableBuilder(
     column: $table.voidedAt,
     builder: (column) => ColumnFilters(column),
@@ -6191,6 +6322,29 @@ class $$EmployeePayRatesTableFilterComposer
           }) => $$EmployeesTableFilterComposer(
             $db: $db,
             $table: $db.employees,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UserProfilesTableFilterComposer get updatedBy {
+    final $$UserProfilesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.updatedBy,
+      referencedTable: $db.userProfiles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UserProfilesTableFilterComposer(
+            $db: $db,
+            $table: $db.userProfiles,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -6263,6 +6417,11 @@ class $$EmployeePayRatesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get voidedAt => $composableBuilder(
     column: $table.voidedAt,
     builder: (column) => ColumnOrderings(column),
@@ -6310,6 +6469,29 @@ class $$EmployeePayRatesTableOrderingComposer
           }) => $$EmployeesTableOrderingComposer(
             $db: $db,
             $table: $db.employees,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UserProfilesTableOrderingComposer get updatedBy {
+    final $$UserProfilesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.updatedBy,
+      referencedTable: $db.userProfiles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UserProfilesTableOrderingComposer(
+            $db: $db,
+            $table: $db.userProfiles,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -6374,6 +6556,9 @@ class $$EmployeePayRatesTableAnnotationComposer
   GeneratedColumn<String> get reason =>
       $composableBuilder(column: $table.reason, builder: (column) => column);
 
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
   GeneratedColumn<DateTime> get voidedAt =>
       $composableBuilder(column: $table.voidedAt, builder: (column) => column);
 
@@ -6428,6 +6613,29 @@ class $$EmployeePayRatesTableAnnotationComposer
     return composer;
   }
 
+  $$UserProfilesTableAnnotationComposer get updatedBy {
+    final $$UserProfilesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.updatedBy,
+      referencedTable: $db.userProfiles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UserProfilesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.userProfiles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
   $$UserProfilesTableAnnotationComposer get voidedBy {
     final $$UserProfilesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -6468,6 +6676,7 @@ class $$EmployeePayRatesTableTableManager
           PrefetchHooks Function({
             bool createdBy,
             bool employeeId,
+            bool updatedBy,
             bool voidedBy,
           })
         > {
@@ -6494,6 +6703,8 @@ class $$EmployeePayRatesTableTableManager
                 Value<String> effectiveFrom = const Value.absent(),
                 Value<String?> effectiveTo = const Value.absent(),
                 Value<String?> reason = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
+                Value<String?> updatedBy = const Value.absent(),
                 Value<DateTime?> voidedAt = const Value.absent(),
                 Value<String?> voidedBy = const Value.absent(),
                 Value<String?> voidReason = const Value.absent(),
@@ -6507,6 +6718,8 @@ class $$EmployeePayRatesTableTableManager
                 effectiveFrom: effectiveFrom,
                 effectiveTo: effectiveTo,
                 reason: reason,
+                updatedAt: updatedAt,
+                updatedBy: updatedBy,
                 voidedAt: voidedAt,
                 voidedBy: voidedBy,
                 voidReason: voidReason,
@@ -6522,6 +6735,8 @@ class $$EmployeePayRatesTableTableManager
                 required String effectiveFrom,
                 Value<String?> effectiveTo = const Value.absent(),
                 Value<String?> reason = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
+                Value<String?> updatedBy = const Value.absent(),
                 Value<DateTime?> voidedAt = const Value.absent(),
                 Value<String?> voidedBy = const Value.absent(),
                 Value<String?> voidReason = const Value.absent(),
@@ -6535,6 +6750,8 @@ class $$EmployeePayRatesTableTableManager
                 effectiveFrom: effectiveFrom,
                 effectiveTo: effectiveTo,
                 reason: reason,
+                updatedAt: updatedAt,
+                updatedBy: updatedBy,
                 voidedAt: voidedAt,
                 voidedBy: voidedBy,
                 voidReason: voidReason,
@@ -6549,7 +6766,12 @@ class $$EmployeePayRatesTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({createdBy = false, employeeId = false, voidedBy = false}) {
+              ({
+                createdBy = false,
+                employeeId = false,
+                updatedBy = false,
+                voidedBy = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [],
@@ -6591,6 +6813,17 @@ class $$EmployeePayRatesTableTableManager
                                 .id,
                           ) as T;
                         }
+                        if (updatedBy) {
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.updatedBy,
+                            referencedTable: $$EmployeePayRatesTableReferences
+                                ._updatedByTable(db),
+                            referencedColumn: $$EmployeePayRatesTableReferences
+                                ._updatedByTable(db)
+                                .id,
+                          ) as T;
+                        }
                         if (voidedBy) {
                           state = state.withJoin(
                             currentTable: table,
@@ -6626,7 +6859,12 @@ typedef $$EmployeePayRatesTableProcessedTableManager =
       $$EmployeePayRatesTableUpdateCompanionBuilder,
       (EmployeePayRate, $$EmployeePayRatesTableReferences),
       EmployeePayRate,
-      PrefetchHooks Function({bool createdBy, bool employeeId, bool voidedBy})
+      PrefetchHooks Function({
+        bool createdBy,
+        bool employeeId,
+        bool updatedBy,
+        bool voidedBy,
+      })
     >;
 
 class $AppDatabaseManager {
